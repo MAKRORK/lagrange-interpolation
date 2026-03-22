@@ -1,0 +1,750 @@
+<!DOCTYPE html>
+<html lang="pl">
+
+<head>
+	<meta charset="UTF-8">
+	<title>Interpolacja Lagrange'a</title>
+
+	<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+
+	<style>
+		html {
+			margin: 0;
+			padding: 0;
+			overflow: hidden;
+		}
+
+		body {
+			margin: 0;
+			padding: 0;
+			overflow: hidden;
+			font-family: Arial, sans-serif;
+			height: 100vh;
+			display: flex;
+		}
+
+		#canvasContainer {
+			flex: 1;
+			background: #f0f0f0;
+		}
+
+		canvas {
+			width: 100%;
+			height: 100%;
+		}
+
+		#sidePanel {
+			width: 400px;
+			background: #fff;
+			border-left: 1px solid #ccc;
+			display: flex;
+			flex-direction: column;
+			padding: 10px;
+			box-sizing: border-box;
+		}
+
+		#resultBox {
+			border: 1px solid #ccc;
+			min-height: 80px;
+			padding: 8px;
+			margin-bottom: 10px;
+			overflow: auto;
+		}
+
+		#errorBox {
+			color: red;
+			min-height: 20px;
+			margin-bottom: 10px;
+		}
+
+		#pointsList {
+			flex: 1;
+			overflow: auto;
+		}
+
+		.pointRow {
+			display: flex;
+			gap: 5px;
+			margin-bottom: 5px;
+		}
+
+		.calculate_row {
+			display: flex;
+			column-gap: 5px;
+			margin-bottom: 0px;
+			margin-top: 10px;
+			width: 100%;
+		}
+
+		.calculate_row input {
+			width: 70px;
+			padding: 4px;
+		}
+
+		.pointRow input {
+			width: 70px;
+			padding: 4px;
+		}
+
+		button {
+			padding: 6px;
+			cursor: pointer;
+		}
+
+		#addPoint {
+			margin-top: 5px;
+		}
+
+		#calculateInPoint {
+			flex: 1;
+			font-weight: bold;
+		}
+
+		#calculate {
+			margin-top: 10px;
+			font-weight: bold;
+		}
+	</style>
+</head>
+
+<body>
+
+	<div id="canvasContainer">
+		<canvas id="canvas"></canvas>
+	</div>
+
+	<div id="sidePanel">
+
+		<div id="resultBox">
+			<br>
+			\[
+			L_{n} =
+			\]
+			</br>
+		</div>
+
+		<div id="errorBox"></div>
+
+		<div id="pointsList"></div>
+
+		<button id="addPoint">Dodaj punkt</button>
+		<div class="calculate_row">
+			<button id="calculateInPoint" onclick="calculateInPoint()">Oblicz y w punkcie:</button>
+			<input id="calculateInPointX" onchange="validateNum(this)" placeholder="x" />
+			<input id="calculateInPointResult" disabled="true" placeholder="y =">
+		</div>
+		<button id="calculate">Oblicz wielomian Lagrange'a</button>
+
+	</div>
+
+	<script>
+
+		const pointsList = document.getElementById("pointsList");
+		const errorBox = document.getElementById("errorBox");
+		const resultBox = document.getElementById("resultBox");
+
+		let points = [];
+
+		function createPoint(x = "", y = "") {
+
+			if (points.length >= 11) {
+				errorBox.textContent = "Maksymalnie 11 punktów";
+				return;
+			}
+
+			const row = document.createElement("div");
+			row.className = "pointRow";
+
+			const xInput = document.createElement("input");
+			xInput.placeholder = "x";
+			xInput.value = x;
+			xInput.addEventListener("change", () => validateX(xInput));
+
+			const yInput = document.createElement("input");
+			yInput.placeholder = "y";
+			yInput.value = y;
+			yInput.addEventListener("change", () => validateNum(yInput));
+
+			const removeBtn = document.createElement("button");
+			removeBtn.textContent = "Usuń";
+
+			removeBtn.onclick = () => {
+
+				if (points.length <= 2) {
+					errorBox.textContent = "Minimum 2 punkty";
+					return;
+				}
+
+				row.remove();
+				points = points.filter(p => p.row !== row);
+			};
+
+			row.appendChild(xInput);
+			row.appendChild(yInput);
+			row.appendChild(removeBtn);
+
+			pointsList.appendChild(row);
+
+			points.push({
+				xInput,
+				yInput,
+				row
+			});
+
+		}
+
+		function validateNum(input) {
+			let value = input.value.trim();
+			if (value === "") return;
+
+			let num = parseFloat(value);
+
+			if (
+				isNaN(num) ||
+				!/^[-]?\d*\.?\d*$/.test(value)
+			) {
+				input.value = "";
+				errorBox.textContent = "Nieprawidłowa wartość";
+				return false;
+			} else {
+				errorBox.textContent = "";
+				return true;
+			}
+		}
+
+		function validateX(input) {
+			if (!validateNum(input)) {
+				return;
+			}
+
+			let value = parseFloat(input.value);
+
+			for (let p of points) {
+
+				if (p.xInput === input) continue;
+
+				let other = parseFloat(p.xInput.value);
+
+				if (value === other) {
+					input.value = "";
+					errorBox.textContent = "Funkcja nie może przyjmować wielu wartości dla jednego x";
+					return;
+				}
+			}
+
+			errorBox.textContent = "";
+		}
+
+
+
+		document.getElementById("addPoint").onclick = () => {
+			errorBox.textContent = "";
+			createPoint();
+		};
+
+		function gcd(a, b) {
+			a = Math.abs(a);
+			b = Math.abs(b);
+			while (b) {
+				[a, b] = [b, a % b];
+			}
+			return a;
+		}
+
+		function makeFraction(num, den) {
+			if (den === 0) throw new Error("Division by zero");
+
+			if (den < 0) {
+				num = -num;
+				den = -den;
+			}
+
+			const g = gcd(num, den);
+			return {
+				num: num / g,
+				den: den / g
+			};
+		}
+
+		function transformNumerators(numerators, denominators, factors) {
+			const result = [];
+
+			for (let i = 0; i < numerators.length; i++) {
+				const poly = numerators[i];
+				const d = denominators[i];
+				const f = factors[i];
+
+				const isIntegerMode =
+					Number.isInteger(d) &&
+					Number.isInteger(f) &&
+					poly.every(t => Number.isInteger(t.x));
+
+				const newPoly = poly.map(term => {
+					const newCoef = term.x * f;
+
+					if (isIntegerMode) {
+						const frac = makeFraction(newCoef, d);
+						return {
+							x: frac,
+							y: term.y
+						};
+					} else {
+						return {
+							x: newCoef / d,
+							y: term.y
+						};
+					}
+				});
+
+				result.push(newPoly);
+			}
+
+			return result;
+		}
+
+
+		function expandPolynomial(roots) {
+			const maxDegree = roots.length;
+
+			let coef = new Array(maxDegree + 1).fill(0);
+			coef[0] = 1;
+			let degree = 0;
+
+			for (let r of roots) {
+				let temp = new Array(maxDegree + 1).fill(0);
+
+				for (let i = 0; i <= degree; i++) {
+					temp[i + 1] += coef[i];
+
+					temp[i] -= coef[i] * r;
+				}
+
+				coef = temp;
+				degree++;
+			}
+
+			const result = [];
+			for (let i = degree; i >= 0; i--) {
+				if (Math.abs(coef[i]) > 1e-12) {
+					result.push({
+						x: coef[i],
+						y: i
+					});
+				}
+			}
+
+			return result;
+		}
+		function isFraction(x) {
+			return typeof x === "object" && x !== null && "num" in x;
+		}
+
+		function addFractions(a, b) {
+			return makeFraction(
+				a.num * b.den + b.num * a.den,
+				a.den * b.den
+			);
+		}
+
+		function sumPolynomials(polys) {
+			const map = new Map();
+
+			for (const poly of polys) {
+				for (const term of poly) {
+					const power = term.y;
+					const coef = term.x;
+
+					if (!map.has(power)) {
+						map.set(power, coef);
+						continue;
+					}
+
+					const existing = map.get(power);
+
+					if (isFraction(existing) && isFraction(coef)) {
+						map.set(power, addFractions(existing, coef));
+					}
+
+					else if (!isFraction(existing) && !isFraction(coef)) {
+						map.set(power, existing + coef);
+					}
+
+					else {
+						const a = isFraction(existing)
+							? existing.num / existing.den
+							: existing;
+
+						const b = isFraction(coef)
+							? coef.num / coef.den
+							: coef;
+
+						map.set(power, a + b);
+					}
+				}
+			}
+
+			const result = [];
+
+			for (const [power, coef] of map.entries()) {
+				if (isFraction(coef)) {
+					if (coef.num !== 0) {
+						result.push({ x: coef, y: power });
+					}
+				} else {
+					if (Math.abs(coef) > 1e-12) {
+						result.push({ x: coef, y: power });
+					}
+				}
+			}
+
+			result.sort((a, b) => b.y - a.y);
+
+			return result;
+		}
+
+
+		function lagrange(pointsArray) {
+			const n = pointsArray.length;
+			let denominators = new Array();
+			let numerators = new Array();
+			let factors = new Array();
+			for (i = 0; i < n; i++) {
+				denominators.push(1);
+				factors.push(pointsArray[i].y);
+				let numerator = new Array();
+				for (j = 0; j < n; j++) {
+					if (j != i) {
+						denominators[i] *= pointsArray[i].x - pointsArray[j].x;
+						numerator.push(pointsArray[j].x);
+					}
+				}
+				numerators.push(expandPolynomial(numerator));
+			}
+			console.log(numerators);
+			console.log(denominators);
+			console.log(factors);
+			let prev_result = new Array();
+			prev_result = transformNumerators(numerators, denominators, factors);
+			console.log(prev_result);
+			let result = sumPolynomials(prev_result);
+			console.log(result);
+			return result;
+		}
+
+		function polynomialToLatex(poly) {
+			function isFraction(x) {
+				return typeof x === "object" && x !== null && "num" in x;
+			}
+
+			function coefToLatex(coef) {
+				if (isFraction(coef)) {
+					if (coef.den === 1) return `${coef.num}`;
+					return `\\frac{${coef.num}}{${coef.den}}`;
+				} else {
+					return `${coef}`;
+				}
+			}
+
+			let result = "";
+
+			poly.forEach((term, index) => {
+				let coef = term.x;
+				const power = term.y;
+
+				let sign = "";
+				let absCoef;
+
+				if (isFraction(coef)) {
+					sign = coef.num < 0 ? "-" : "+";
+					absCoef = {
+						num: Math.abs(coef.num),
+						den: coef.den
+					};
+				} else {
+					sign = coef < 0 ? "-" : "+";
+					absCoef = Math.abs(coef);
+				}
+				if (index === 0) {
+					sign = sign === "+" ? "" : "-";
+				}
+
+				let coefStr = coefToLatex(absCoef);
+
+				const isOne =
+					(isFraction(absCoef) && absCoef.num === 1 && absCoef.den === 1) ||
+					absCoef === 1;
+
+				let termStr = "";
+
+				if (power === 0) {
+					termStr = coefStr;
+				} else if (power === 1) {
+					termStr = isOne ? "x" : `${coefStr}x`;
+				} else {
+					termStr = isOne ? `x^{${power}}` : `${coefStr}x^{${power}}`;
+				}
+
+				result += ` ${sign} ${termStr}`;
+			});
+
+			return result.trim();
+		}
+
+		function interpolate(polynomial, x) {
+			let result = 0;
+			polynomial.forEach((term, index) => {
+				const coef = term.x;
+				const power = term.y;
+
+				if (isFraction(coef)) {
+					result += Math.pow(x, power) * (coef.num / coef.den);
+				}
+				else {
+					result += Math.pow(x, power) * coef;
+				}
+			})
+			return result;
+		}
+		let polynomial = new Array();
+		let parsed = new Array();
+		let minX = 0;
+		let maxX = 0;
+
+		function drawGrid(ctx, canvas, minX, maxX, minY, maxY) {
+
+			const width = canvas.width;
+			const height = canvas.height;
+
+			function toCanvasX(x) {
+				return (x - minX) / (maxX - minX) * width;
+			}
+
+			function toCanvasY(y) {
+				return height - (y - minY) / (maxY - minY) * height;
+			}
+
+			function getStep(range) {
+				let rough = range / 10;
+				let pow = Math.pow(10, Math.floor(Math.log10(rough)));
+				let digit = rough / pow;
+
+				if (digit < 2) return 1 * pow;
+				if (digit < 5) return 2 * pow;
+				return 5 * pow;
+			}
+
+			let stepX = getStep(maxX - minX);
+			let stepY = getStep(maxY - minY);
+
+			ctx.lineWidth = 1;
+
+			ctx.strokeStyle = "#ddd";
+			for (let x = Math.ceil(minX / stepX) * stepX; x <= maxX; x += stepX) {
+
+				let cx = toCanvasX(x);
+
+				ctx.beginPath();
+				ctx.moveTo(cx, 0);
+				ctx.lineTo(cx, height);
+				ctx.stroke();
+			}
+
+			for (let y = Math.ceil(minY / stepY) * stepY; y <= maxY; y += stepY) {
+
+				let cy = toCanvasY(y);
+
+				ctx.beginPath();
+				ctx.moveTo(0, cy);
+				ctx.lineTo(width, cy);
+				ctx.stroke();
+			}
+
+			ctx.strokeStyle = "#0000ff";
+			ctx.lineWidth = 2;
+
+			if (minX <= 0 && maxX >= 0) {
+				let cx = toCanvasX(0);
+				ctx.beginPath();
+				ctx.moveTo(cx, 0);
+				ctx.lineTo(cx, height);
+				ctx.stroke();
+			}
+			ctx.strokeStyle = "#00ff00";
+			ctx.lineWidth = 2;
+			if (minY <= 0 && maxY >= 0) {
+				let cy = toCanvasY(0);
+				ctx.beginPath();
+				ctx.moveTo(0, cy);
+				ctx.lineTo(width, cy);
+				ctx.stroke();
+			}
+
+			ctx.fillStyle = "#000";
+			ctx.font = "10px Arial";
+
+			for (let x = Math.ceil(minX / stepX) * stepX; x <= maxX; x += stepX) {
+				let cx = toCanvasX(x);
+				ctx.fillText(x.toFixed(2), cx + 2, height - 5);
+			}
+
+			for (let y = Math.ceil(minY / stepY) * stepY; y <= maxY; y += stepY) {
+				let cy = toCanvasY(y);
+				ctx.fillText(y.toFixed(2), 5, cy - 2);
+			}
+		}
+		function drawGraph(parsed, polynomial) {
+
+			const canvas = document.getElementById("canvas");
+			const ctx = canvas.getContext("2d");
+
+			canvas.width = canvas.clientWidth;
+			canvas.height = canvas.clientHeight;
+
+			ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+			minX = Math.min(...parsed.map(p => p.x));
+			maxX = Math.max(...parsed.map(p => p.x));
+
+			let step = (maxX - minX) / 200;
+
+			let graphPoints = [];
+
+			for (let x = minX; x <= maxX; x += step) {
+				let y = interpolate(polynomial, x);
+				if (!isNaN(y) && isFinite(y)) {
+					graphPoints.push({ x, y });
+				}
+			}
+
+			if (graphPoints.length === 0) return;
+
+			let minY = Math.min(...graphPoints.map(p => p.y));
+			let maxY = Math.max(...graphPoints.map(p => p.y));
+
+			if (maxY === minY) {
+				maxY += 1;
+				minY -= 1;
+			}
+			drawGrid(ctx, canvas, minX, maxX, minY, maxY);
+			ctx.strokeStyle = "#000";
+			ctx.lineWidth = 2;
+			function toCanvasX(x) {
+				return (x - minX) / (maxX - minX) * canvas.width;
+			}
+
+			function toCanvasY(y) {
+				return canvas.height - (y - minY) / (maxY - minY) * canvas.height;
+			}
+
+			ctx.beginPath();
+
+			for (let i = 0; i < graphPoints.length; i++) {
+
+				let cx = toCanvasX(graphPoints[i].x);
+				let cy = toCanvasY(graphPoints[i].y);
+
+				if (i === 0) {
+					ctx.moveTo(cx, cy);
+				} else {
+					ctx.lineTo(cx, cy);
+				}
+			}
+
+			ctx.stroke();
+
+			ctx.fillStyle = "red";
+
+			for (let p of parsed) {
+				let cx = toCanvasX(p.x);
+				let cy = toCanvasY(p.y);
+
+				ctx.beginPath();
+				ctx.arc(cx, cy, 4, 0, Math.PI * 2);
+				ctx.fill();
+			}
+		}
+		window.addEventListener("resize", () => {
+			if (polynomial.length == 0) {
+				return;
+			}
+			drawGraph(parsed, polynomial);
+		});
+		document.getElementById("calculate").onclick = () => {
+
+			errorBox.textContent = "";
+
+			if (points.length < 2) {
+				errorBox.textContent = "Minimum 2 punkty";
+				return;
+			}
+
+			parsed = [];
+
+			for (let p of points) {
+				if (!validateX(p.xInput)) {
+					return;
+				}
+				if (!validateNum(p.yInput)) {
+					return;
+				}
+
+				let x = parseFloat(p.xInput.value);
+				let y = parseFloat(p.yInput.value);
+
+				if (isNaN(x) || isNaN(y)) {
+					errorBox.textContent = "Nieprawidłowe lub brakujące dane";
+					return;
+				}
+
+				parsed.push({ x, y });
+			}
+			console.log(parsed);
+			polynomial = lagrange(parsed);
+
+			const latex = polynomialToLatex(polynomial);
+
+			resultBox.innerHTML = `
+			<br>
+    		\\[
+    		L_{${parsed.length - 1}} = ${latex}
+    		\\]
+			</br>
+			`;
+
+			MathJax.typeset();
+			drawGraph(parsed, polynomial);
+			errorBox.textContent = "";
+		};
+
+		function calculateInPoint() {
+			console.log(polynomial);
+
+			if (polynomial.length == 0) {
+				errorBox.textContent = "Wielomian jeszcze nie obliczony";
+				return;
+			}
+			const xInput = document.getElementById("calculateInPointX");
+			const resBlock = document.getElementById("calculateInPointResult");
+			if (!validateNum(xInput)) {
+				return;
+			}
+			const x = parseFloat(xInput.value);
+			if (x > maxX || x < minX) {
+				errorBox.textContent = "X poza odcinkiem";
+				return;
+			}
+			const y = interpolate(polynomial, x);
+			resBlock.value = `y = ${y}`;
+			errorBox.textContent = "";
+		}
+
+		function init() {
+			createPoint();
+			createPoint();
+		}
+		init();
+	</script>
+
+</body>
+
+</html>
