@@ -134,6 +134,7 @@
 			<input id="calculateInPointResult" disabled="true" placeholder="y =">
 		</div>
 		<button id="calculate">Oblicz wielomian Lagrange'a</button>
+		<button id="copyLatex" style="margin-top: 10px;" onclick="copyLatex()">Kopijuj wielomia w LaTeX</button>
 
 	</div>
 
@@ -421,14 +422,9 @@
 				}
 				numerators.push(expandPolynomial(numerator));
 			}
-			console.log(numerators);
-			console.log(denominators);
-			console.log(factors);
 			let prev_result = new Array();
 			prev_result = transformNumerators(numerators, denominators, factors);
-			console.log(prev_result);
 			let result = sumPolynomials(prev_result);
-			console.log(result);
 			return result;
 		}
 
@@ -436,13 +432,16 @@
 			function isFraction(x) {
 				return typeof x === "object" && x !== null && "num" in x;
 			}
+			function round(num) {
+				return Math.round(num * 10000) / 10000;
+			}
 
 			function coefToLatex(coef) {
 				if (isFraction(coef)) {
 					if (coef.den === 1) return `${coef.num}`;
 					return `\\frac{${coef.num}}{${coef.den}}`;
 				} else {
-					return `${coef}`;
+					return `${round(coef)}`;
 				}
 			}
 
@@ -670,6 +669,7 @@
 			}
 			drawGraph(parsed, polynomial);
 		});
+		let latex_poly = "";
 		document.getElementById("calculate").onclick = () => {
 
 			errorBox.textContent = "";
@@ -699,15 +699,14 @@
 
 				parsed.push({ x, y });
 			}
-			console.log(parsed);
 			polynomial = lagrange(parsed);
 
-			const latex = polynomialToLatex(polynomial);
+			latex_poly = `L_{${parsed.length - 1}} = ${polynomialToLatex(polynomial)}`;
 
 			resultBox.innerHTML = `
 			<br>
     		\\[
-    		L_{${parsed.length - 1}} = ${latex}
+			${latex_poly}
     		\\]
 			</br>
 			`;
@@ -716,10 +715,15 @@
 			drawGraph(parsed, polynomial);
 			errorBox.textContent = "";
 		};
-
+		function copyLatex() {
+			if (polynomial.length == 0) {
+				errorBox.textContent = "Wielomian jeszcze nie obliczony";
+				return;
+			}
+			navigator.clipboard.writeText(latex_poly);
+			errorBox.textContent = "";
+		}
 		function calculateInPoint() {
-			console.log(polynomial);
-
 			if (polynomial.length == 0) {
 				errorBox.textContent = "Wielomian jeszcze nie obliczony";
 				return;
